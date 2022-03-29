@@ -48,5 +48,10 @@ namespace ManagedMstsc
         {
             InitializeComponent();
         }
+
+        public void SetConnectingText(string text)
+        {
+            connectingText.Text = text;
+        }
     }
 }

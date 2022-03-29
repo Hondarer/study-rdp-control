@@ -4,8 +4,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="RdpConnectingWindow" Height="450" Width="800" WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
+        Title="RdpConnectingWindow" Height="100" Width="400" WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
     <Grid>
-        
+        <TextBlock x:Name="connectingText" />
     </Grid>
 </Window>

@@ -1,5 +1,7 @@
 ﻿using MSTSCLib;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 
@@ -64,8 +66,12 @@ namespace ManagedMstsc
             }
         }
 
-        public void Connect()
+        private Window _parent;
+
+        public void Connect(Window parent = null)
         {
+            _parent = parent;
+
             connectingWindow = new RdpConnectingWindow();
             connectingWindow.Show();
 
@@ -76,13 +82,11 @@ namespace ManagedMstsc
             RdpClient.AdvancedSettings9.RedirectPrinters = false;
             RdpClient.AdvancedSettings9.RedirectSmartCards = false;
 
-            //RdpClient.AdvancedSettings9.GrabFocusOnConnect = true;
-
-            RdpClient.ColorDepth = 24; // int value can be 8, 15, 16, or 24
+            RdpClient.ColorDepth = 32;
 
             IMsRdpClientNonScriptable5 innerOcx = (IMsRdpClientNonScriptable5)RdpClient.GetOcx();
 
-#if true
+#if false // 外から与える
             // これを指定しても、シングルモニターの場合は機能しない。
             // マルチモニターの場合、これを指定すると以下の挙動が発生する。
             // ・勝手に全画面モードで開始
@@ -99,16 +103,17 @@ namespace ManagedMstsc
             RdpClient.DesktopWidth = (int)SystemParameters.PrimaryScreenWidth;
             RdpClient.DesktopHeight = (int)SystemParameters.PrimaryScreenHeight;
 
-#if false
+#if false // 外から与える
             innerOcx.DisableConnectionBar = true;
-#else
-            RdpClient.AdvancedSettings9.ConnectionBarShowMinimizeButton = false;
-            RdpClient.AdvancedSettings9.PinConnectionBar = false;
 #endif
 
+            RdpClient.AdvancedSettings9.ConnectionBarShowMinimizeButton = false;
+            RdpClient.AdvancedSettings9.PinConnectionBar = false;
+
+#if false // 外から与える
             // Windows キーなどのホットキーを AxMsRdpClient にルーティングする。
-            //RdpClient.AdvancedSettings9.EnableWindowsKey = 1;
-            //RdpClient.SecuredSettings3.KeyboardHookMode = 1;
+            RdpClient.SecuredSettings3.KeyboardHookMode = 1;
+#endif
 
             RdpClient.OnEnterFullScreenMode += _rdpClient_OnEnterFullScreenMode;
             RdpClient.OnLeaveFullScreenMode += RdpClient_OnLeaveFullScreenMode;
@@ -118,7 +123,21 @@ namespace ManagedMstsc
             RdpClient.OnConnecting += _rdpClient_OnConnecting;
             RdpClient.OnConnected += RdpClient_OnConnected;
 
+            RdpClient.OnConfirmClose += RdpClient_OnConfirmClose;
+
+            RdpClient.OnRemoteDesktopSizeChange += RdpClient_OnRemoteDesktopSizeChange;
+
             RdpClient.Connect();
+        }
+
+        private void RdpClient_OnRemoteDesktopSizeChange(object sender, AxMSTSCLib.IMsTscAxEvents_OnRemoteDesktopSizeChangeEvent e)
+        {
+            Debug.WriteLine($"OnRemoteDesktopSizeChange");
+        }
+
+        private void RdpClient_OnConfirmClose(object sender, AxMSTSCLib.IMsTscAxEvents_OnConfirmCloseEvent e)
+        {
+            RdpClient.Disconnect();
         }
 
         private void RdpClient_OnLeaveFullScreenMode(object sender, EventArgs e)
@@ -127,10 +146,14 @@ namespace ManagedMstsc
             {
                 Visibility = Visibility.Visible;
             }
+
+            Debug.WriteLine($"OnLeaveFullScreenMode");
         }
 
         private void RdpClient_OnConnected(object sender, EventArgs e)
         {
+            Debug.WriteLine($"OnConnected");
+
             if (connectingWindow != null)
             {
                 connectingWindow.Close();
@@ -149,6 +172,11 @@ namespace ManagedMstsc
         {
             DisconnectReason = RdpClient.GetErrorDescription((uint)e.discReason, (uint)RdpClient.ExtendedDisconnectReason);
 
+            if (nextProcDelegate != null)
+            {
+                SetWindowProc(uiMainWindowHandle, nextProcDelegate);
+            }
+
             Close();
         }
 
@@ -157,8 +185,181 @@ namespace ManagedMstsc
             if (uiMainWindowHandle == IntPtr.Zero)
             {
                 uiMainWindowHandle = FindWindowEx(RdpClient.Handle, IntPtr.Zero, "UIMainClass", null);
+                wndProcDelegate = new WndProcDelegate(RdpHookProc);
+                nextProcDelegate = SetWindowProc(uiMainWindowHandle, wndProcDelegate);
             }
         }
+
+#region subclass function
+
+        const int GWL_WNDPROC = -4;
+
+        const int WM_MOVE = 0x0003;
+        const int WM_SIZE = 0x0005;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
+        private static extern IntPtr SetWindowLongPtr32(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+        private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+        [DllImport("user32.dll")]
+        static extern IntPtr CallWindowProc(WndProcDelegate lpPrevWndFunc, IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        private delegate bool MonitorEnumDelegate(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
+
+        private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, Delegate lpfnEnum, IntPtr dwData);
+
+        static WndProcDelegate wndProcDelegate;
+        static WndProcDelegate nextProcDelegate;
+
+        private static WndProcDelegate SetWindowProc(IntPtr hWnd, WndProcDelegate newWndProc)
+        {
+            IntPtr newWndProcPtr = Marshal.GetFunctionPointerForDelegate(newWndProc);
+            IntPtr oldWndProcPtr;
+
+            if (IntPtr.Size == 4)
+                oldWndProcPtr = SetWindowLongPtr32(hWnd, GWL_WNDPROC, newWndProcPtr);
+            else
+                oldWndProcPtr = SetWindowLongPtr64(hWnd, GWL_WNDPROC, newWndProcPtr);
+
+            return (WndProcDelegate)Marshal.GetDelegateForFunctionPointer(oldWndProcPtr, typeof(WndProcDelegate));
+        }
+
+        private List<RECT> GetMonitorRects()
+        {
+            List<RECT> monitorRects = new List<RECT>();
+
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero,
+                new MonitorEnumDelegate((IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData) =>
+                {
+                    monitorRects.Add(lprcMonitor);
+                    return true;
+                }), IntPtr.Zero);
+
+            return monitorRects;
+        }
+
+        bool reEntry = false;
+
+        public IntPtr RdpHookProc(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam)
+        {
+            if (message == WM_MOVE)
+            {
+                int x = (short)((uint)lParam & 0xFFFF);
+                int y = (short)(((uint)lParam >> 16) & 0xFFFF);
+
+                Debug.WriteLine($"WM_MOVE {RdpClient.Connected} {RdpClient.FullScreen} {x},{y}");
+
+                if (RdpClient.FullScreen == true)
+                {
+                    IMsRdpClientNonScriptable5 innerOcx = (IMsRdpClientNonScriptable5)RdpClient.GetOcx();
+                    if (innerOcx.UseMultimon == true)
+                    {
+                        // マルチモニターの場合の処理
+                        int expectX = GetSystemMetrics(SM_XVIRTUALSCREEN);
+                        int expectY = GetSystemMetrics(SM_YVIRTUALSCREEN);
+                        int expectCX = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+                        int expectCY = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+                        if ((x != expectX || y != expectY) && reEntry == false)
+                        {
+                            reEntry = true;
+
+                            CallWindowProc(nextProcDelegate, hWnd, message, wParam, lParam);
+
+                            Debug.WriteLine($"FIX on WM_MOVE START");
+                            ShowScrollBar(uiMainWindowHandle, SB_BOTH, false);
+                            SetWindowPos(uiMainWindowHandle, 0, expectX, expectY, expectCX, expectCY, 0);
+                            SetWindowPos(uiMainWindowHandle, 0, expectX, expectY, expectCX, expectCY, 0);
+                            Debug.WriteLine($"FIX on WM_MOVE END");
+
+                            reEntry = false;
+                            return IntPtr.Zero;
+                        }
+                    }
+                    else
+                    {
+                        // シングルでも全画面の場合に、所属モニターの選定をしてあげる必要あり
+                        List<RECT> monitorRects = GetMonitorRects();
+
+                        // _parent のスクリーン座標の中心点が所属するディスプレイに表示させる、見つからない場合は無処理
+                    }
+                }
+            }
+
+            if (message == WM_SIZE)
+            {
+                int cx = (short)((uint)lParam & 0xFFFF);
+                int cy = (short)(((uint)lParam >> 16) & 0xFFFF);
+
+                Debug.WriteLine($"WM_SIZE {RdpClient.Connected} {RdpClient.FullScreen} {wParam} {cx},{cy}");
+
+                if (RdpClient.FullScreen == true)
+                {
+                    IMsRdpClientNonScriptable5 innerOcx = (IMsRdpClientNonScriptable5)RdpClient.GetOcx();
+                    if (innerOcx.UseMultimon == true)
+                    {
+                        // マルチモニターの場合の処理
+                        int expectX = GetSystemMetrics(SM_XVIRTUALSCREEN);
+                        int expectY = GetSystemMetrics(SM_YVIRTUALSCREEN);
+                        int expectCX = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+                        int expectCY = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+                        if ((cx != expectCX || cy != expectCY) && reEntry == false)
+                        {
+                            reEntry = true;
+
+                            CallWindowProc(nextProcDelegate, hWnd, message, wParam, lParam);
+
+                            Debug.WriteLine($"FIX on WM_SIZE START");
+                            ShowScrollBar(uiMainWindowHandle, SB_BOTH, false);
+                            SetWindowPos(uiMainWindowHandle, 0, expectX, expectY, expectCX, expectCY, 0);
+                            SetWindowPos(uiMainWindowHandle, 0, expectX, expectY, expectCX, expectCY, 0);
+                            Debug.WriteLine($"FIX on WM_SIZE END");
+
+                            reEntry = false;
+
+                            return IntPtr.Zero;
+                        }
+                    }
+                    else
+                    {
+                        // シングルでも全画面の場合に、所属モニターの選定をしてあげる必要あり
+                        List<RECT> monitorRects = GetMonitorRects();
+
+                        // _parent のスクリーン座標の中心点が所属するディスプレイに表示させる、見つからない場合は無処理
+                    }
+                }
+            }
+
+            return CallWindowProc(nextProcDelegate, hWnd, message, wParam, lParam);
+        }
+
+#endregion
+
+        const int SWP_NOSIZE = 1;
+        const int SWP_NOMOVE = 2;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetWindowPos(IntPtr hWnd, int hWndInsertAfter, int x, int y, int cx, int cy, int uFlags);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ShowScrollBar(IntPtr hWnd, int wBar, [MarshalAs(UnmanagedType.Bool)] bool bShow);
+
+        const int SB_BOTH = 3;
 
         private void _rdpClient_OnEnterFullScreenMode(object sender, EventArgs e)
         {
@@ -167,22 +368,7 @@ namespace ManagedMstsc
                 Visibility = Visibility.Collapsed;
             }
 
-            IMsRdpClientNonScriptable5 innerOcx = (IMsRdpClientNonScriptable5)RdpClient.GetOcx();
-
-            if (innerOcx.UseMultimon == true)
-            {
-                // すべてのモニターを使用している場合、
-                // このタイミングで(プライマリーモニタ上で)最大化状態のウインドウサイスを、すべてのモニター領域に拡大する。
-
-                // NOTE: 単一モニター使用の最大化において、正しく親のモニターを特定しているか確認する。必ずプライマリになるかも。
-                // TODO: RDP上のRDPで正しく座標が取れていない可能性がある。確認する。
-                MoveWindow(uiMainWindowHandle,
-                    GetSystemMetrics(SM_XVIRTUALSCREEN),
-                    GetSystemMetrics(SM_YVIRTUALSCREEN),
-                    GetSystemMetrics(SM_CXVIRTUALSCREEN),
-                    GetSystemMetrics(SM_CYVIRTUALSCREEN),
-                    true);
-            }
+            Debug.WriteLine($"OnEnterFullScreenMode");
         }
     }
 }

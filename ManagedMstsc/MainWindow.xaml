@@ -13,6 +13,10 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
@@ -28,7 +32,19 @@
         <TextBlock Text="password:" Margin="0,8,8,0" Grid.Row="2" />
         <PasswordBox x:Name="password" Margin="0,8,0,0" Grid.Row="2" Grid.Column="1" />
 
-        <Button Content="Connect" IsDefault="True" Grid.Row="3" Grid.Column="1" HorizontalAlignment="Right" Margin="0,8,0,0" Padding="4" Click="Button_Click" />
+        <TextBlock Text="fullScreen:" Margin="0,8,8,0" Grid.Row="3" />
+        <CheckBox x:Name="fullScreen" Margin="0,8,0,0" Grid.Row="3" Grid.Column="1" HorizontalAlignment="Left" />
+
+        <TextBlock Text="useMultiMon:" Margin="0,8,8,0" Grid.Row="4" />
+        <CheckBox x:Name="useMultiMon" Margin="0,8,0,0" Grid.Row="4" Grid.Column="1" HorizontalAlignment="Left" Checked="useMultiMon_Checked" Unchecked="useMultiMon_Unchecked" />
+
+        <TextBlock Text="useConnectionBar:" Margin="0,8,8,0" Grid.Row="5" />
+        <CheckBox x:Name="useConnectionBar" IsChecked="True" Margin="0,8,0,0" Grid.Row="5" Grid.Column="1" HorizontalAlignment="Left" />
+
+        <TextBlock Text="hotkeyWhenNormalWindow:" Margin="0,8,8,0" Grid.Row="6" />
+        <CheckBox x:Name="hotkeyWhenNormalWindow" Margin="0,8,0,0" Grid.Row="6" Grid.Column="1" HorizontalAlignment="Left" />
+
+        <Button Content="Connect" IsDefault="True" Grid.Row="7" Grid.Column="1" HorizontalAlignment="Right" Margin="0,8,0,0" Padding="4" Click="Button_Click" />
     
     </Grid>
 </Window>
