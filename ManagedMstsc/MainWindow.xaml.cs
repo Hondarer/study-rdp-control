@@ -25,20 +25,16 @@ namespace ManagedMstsc
 
             #region 設定反映
 
-            // TODO: クラスに切り出すか、rdpWindow のプロパティに用意すべき。
-
-            rdpWindow.RdpClient.Server = server.Text;
-            rdpWindow.RdpClient.UserName = user.Text;
-            rdpWindow.RdpClient.AdvancedSettings9.ClearTextPassword = password.Password;
-            rdpWindow.RdpClient.FullScreen = (bool)fullScreen.IsChecked;
-
-            IMsRdpClientNonScriptable5 innerOcx = (IMsRdpClientNonScriptable5)rdpWindow.RdpClient.GetOcx();
-            innerOcx.UseMultimon = (bool)useMultiMon.IsChecked;
-            innerOcx.DisableConnectionBar = !(bool)useConnectionBar.IsChecked;
+            rdpWindow.Server = server.Text;
+            rdpWindow.UserName = user.Text;
+            rdpWindow.ClearTextPassword = password.Password;
+            rdpWindow.FullScreen = (bool)fullScreen.IsChecked;
+            rdpWindow.UseMultimon = (bool)useMultiMon.IsChecked;
+            rdpWindow.DisableConnectionBar = !(bool)useConnectionBar.IsChecked;
 
             if ((bool)hotkeyWhenNormalWindow.IsChecked == true)
             {
-                rdpWindow.RdpClient.SecuredSettings3.KeyboardHookMode = 1; // default: 2
+                rdpWindow.KeyboardHookMode = 1;
             }
 
             #endregion
