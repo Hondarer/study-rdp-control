@@ -45,6 +45,7 @@ namespace ManagedMstsc
         private void Window_Closed(object sender, EventArgs e)
         {
             Debug.WriteLine($"rdpWindow.DisconnectReason: {rdpWindow.DisconnectReason}");
+            Console.WriteLine($"rdpWindow.DisconnectReason: {rdpWindow.DisconnectReason}");
 
             rdpWindow.Closed -= Window_Closed;
             Visibility = Visibility.Visible;
