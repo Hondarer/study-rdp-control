@@ -32,7 +32,15 @@ namespace ManagedMstsc
 
         #region Result
 
-        public string DisconnectReason { get; private set; }
+        public int DisconnectReason { get; private set; }
+
+        public ExtendedDisconnectReasonCode ExtendedDisconnectReason { get; private set; }
+
+        /// <summary>
+        /// 切断理由を取得します。
+        /// </summary>
+        /// <remarks>
+        public string DisconnectReasonString { get; private set; }
 
         #endregion
 
@@ -184,7 +192,7 @@ namespace ManagedMstsc
             catch (Exception ex)
             {
                 // サーバー名未指定などで通過
-                DisconnectReason = $"接続を開始できませんでした。({ex.Message})";
+                DisconnectReasonString = $"接続を開始できませんでした。({ex.Message})";
                 Close();
             }
         }
@@ -227,7 +235,9 @@ namespace ManagedMstsc
 
         private void RdpClient_OnDisconnected(object sender, AxMSTSCLib.IMsTscAxEvents_OnDisconnectedEvent e)
         {
-            DisconnectReason = _rdpClient.GetErrorDescription((uint)e.discReason, (uint)_rdpClient.ExtendedDisconnectReason);
+            DisconnectReason = e.discReason;
+            ExtendedDisconnectReason = _rdpClient.ExtendedDisconnectReason;
+            DisconnectReasonString = _rdpClient.GetErrorDescription((uint)e.discReason, (uint)_rdpClient.ExtendedDisconnectReason);
 
             if (nextProcDelegate != null)
             {
@@ -346,8 +356,11 @@ namespace ManagedMstsc
                             return IntPtr.Zero;
                         }
                     }
-                    else
+                    else if (Left == double.NaN)
                     {
+                        // FIXME: 自身の座標が NaN で無い場合は、本処理不要。まだ自身の座標が定まっていないとき専用の処理。
+                        //        と思ったが、この段階では定まっていた。そもそも自身の座標を親のウインドウにする必要あり。
+
                         // シングルでも全画面の場合に、所属モニターの選定をしてあげる必要あり
                         // _parent のスクリーン座標の中心点が所属するディスプレイに表示させる、見つからない場合は無処理
                         List<Rect> monitorRects = GetMonitorRects();
@@ -357,9 +370,14 @@ namespace ManagedMstsc
 
                         foreach (Rect monitorRect in monitorRects)
                         {
-                            if (monitorRect.Contains(parentPoint) == true)
+                            if (monitorRect.Contains(parentPoint) == true && reEntry == false)
                             {
-                                // TODO:
+                                reEntry = true;
+                                Debug.WriteLine($"FIX on WM_MOVE(Single) START");
+                                NativeMethods.SetWindowPos(_uiMainWindowHandle, 0, (int)monitorRect.Left, (int)monitorRect.Top, 0, 0, NativeMethods.SWP_NOSIZE);
+                                Debug.WriteLine($"FIX on WM_MOVE(Single) END");
+                                reEntry = false;
+                                return IntPtr.Zero;
                             }
                         }
 

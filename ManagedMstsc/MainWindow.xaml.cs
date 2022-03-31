@@ -1,6 +1,8 @@
-﻿using MSTSCLib;
-using System;
+﻿using System;
 using System.Diagnostics;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Unicode;
 using System.Windows;
 
 namespace ManagedMstsc
@@ -44,12 +46,23 @@ namespace ManagedMstsc
 
         private void Window_Closed(object sender, EventArgs e)
         {
-            Debug.WriteLine($"rdpWindow.DisconnectReason: {rdpWindow.DisconnectReason}");
-            Console.WriteLine($"rdpWindow.DisconnectReason: {rdpWindow.DisconnectReason}");
+            string result = JsonSerializer.Serialize(
+                new ResultEntity()
+                {
+                    DisconnectReason = rdpWindow.DisconnectReason,
+                    ExtendedDisconnectReason = rdpWindow.ExtendedDisconnectReason,
+                    DisconnectReasonString = rdpWindow.DisconnectReasonString
+                }, new JsonSerializerOptions() { Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) });
+
+            Debug.WriteLine($"{result}");
+            Console.WriteLine($"{result}");
 
             rdpWindow.Closed -= Window_Closed;
             Visibility = Visibility.Visible;
             rdpWindow = null;
+
+            // プログラムとして切断後は直ちに終わる場合
+            //Close();
         }
 
         private void useMultiMon_Checked(object sender, RoutedEventArgs e)
