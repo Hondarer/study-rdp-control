@@ -11,7 +11,6 @@ namespace ManagedMstsc
         [JsonIgnore]
         public ExtendedDisconnectReasonCode ExtendedDisconnectReason { get; set; }
 
-
         [JsonPropertyName("extendedDisconnectReason")]
         public string ExtendedDisconnectReasonString
         {
@@ -31,17 +30,31 @@ namespace ManagedMstsc
         [JsonPropertyName("disconnectReasonString")]
         public string DisconnectReasonString { get; set; } = null;
 
+        public ResultEntity(string disconnectReasonString, int disconnectReason = 0, ExtendedDisconnectReasonCode extendedDisconnectReason = ExtendedDisconnectReasonCode.exDiscReasonNoInfo)
+        {
+            DisconnectReason = disconnectReason;
+            ExtendedDisconnectReason = extendedDisconnectReason;
+            DisconnectReasonString = disconnectReasonString;
+        }
+
         [JsonPropertyName("isError")]
         public bool IsError
         {
             get
             {
                 // DisconnectReason
-                // 516 reason in case of reconnect expired
-                // 2308 connection lost
-                // 2 - regular logof also in case of forced reboot or shutdown
+                // https://docs.microsoft.com/en-us/windows/win32/termserv/imstscaxevents-ondisconnected
+                //
+                // 1 - Local disconnection. This is not an error code.
+                // 2 - Remote disconnection by user. This is not an error code.
+                // 3 - Remote disconnection by server. This is not an error code.
 
-                return (string.IsNullOrEmpty(DisconnectReasonString) == false) || (DisconnectReason != 2);
+                if ((DisconnectReason == 1) || (DisconnectReason == 2) || (DisconnectReason == 3))
+                {
+                    return false;
+                }
+
+                return string.IsNullOrEmpty(DisconnectReasonString) == false;
             }
         }
     }

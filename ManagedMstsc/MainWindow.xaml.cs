@@ -12,24 +12,24 @@ namespace ManagedMstsc
     /// </summary>
     public partial class MainWindow : Window
     {
+        RdpWindow rdpWindow;
+
         public MainWindow()
         {
             InitializeComponent();
         }
 
-        RdpFullScreenWindow rdpWindow;
-
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-            rdpWindow = new RdpFullScreenWindow();
+            rdpWindow = new RdpWindow();
             rdpWindow.Closed += Window_Closed;
-            Visibility = Visibility.Collapsed;
+            Hide();
 
             #region 設定反映
 
             rdpWindow.Server = server.Text;
             rdpWindow.UserName = user.Text;
-            rdpWindow.ClearTextPassword = password.Password;
+            rdpWindow.Password = password.Password;
             rdpWindow.FullScreen = (bool)fullScreen.IsChecked;
             rdpWindow.UseMultimon = (bool)useMultiMon.IsChecked;
             rdpWindow.DisableConnectionBar = !(bool)useConnectionBar.IsChecked;
@@ -41,28 +41,23 @@ namespace ManagedMstsc
 
             #endregion
 
-            rdpWindow.Connect(this);
+            rdpWindow.Connect(new Rect(Left, Top, Width, Height));
         }
 
         private void Window_Closed(object sender, EventArgs e)
         {
-            string result = JsonSerializer.Serialize(
-                new ResultEntity()
-                {
-                    DisconnectReason = rdpWindow.DisconnectReason,
-                    ExtendedDisconnectReason = rdpWindow.ExtendedDisconnectReason,
-                    DisconnectReasonString = rdpWindow.DisconnectReasonString
-                }, new JsonSerializerOptions() { Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) });
+            string result = JsonSerializer.Serialize(rdpWindow.Result, new JsonSerializerOptions() { Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) });
 
             Debug.WriteLine($"{result}");
             Console.WriteLine($"{result}");
 
             rdpWindow.Closed -= Window_Closed;
-            Visibility = Visibility.Visible;
             rdpWindow = null;
 
             // プログラムとして切断後は直ちに終わる場合
             //Close();
+
+            Show();
         }
 
         private void useMultiMon_Checked(object sender, RoutedEventArgs e)
