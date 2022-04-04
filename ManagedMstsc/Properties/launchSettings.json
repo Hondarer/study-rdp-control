@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ManagedMstsc": {
+      "commandName": "Project",
+      "commandLineArgs": "/v:z620-home"
+    }
+  }
+}

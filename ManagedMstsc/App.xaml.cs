@@ -1,5 +1,9 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Unicode;
 using System.Windows;
 
 namespace ManagedMstsc
@@ -71,6 +75,55 @@ namespace ManagedMstsc
         static App()
         {
             AttachConsoleWithWpfApplication();
+        }
+
+        RdpWindow rdpWindow;
+
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            if (e.Args.Length > 0)
+            {
+                // 直接起動
+                rdpWindow = new RdpWindow();
+
+                foreach (string arg in e.Args)
+                {
+                    if (arg.StartsWith("/v:") == true)
+                    {
+                        rdpWindow.Server = arg.Substring(3);
+                    }
+                    if (arg.StartsWith("/u:") == true)
+                    {
+                        rdpWindow.UserName = arg.Substring(3);
+                    }
+                    if (arg.StartsWith("/p:") == true)
+                    {
+                        rdpWindow.Password = arg.Substring(3);
+                    }
+                }
+
+                rdpWindow.Closed += RdpWindow_Closed;
+                rdpWindow.Connect();
+            }
+            else
+            {
+                new MainWindow().Show();
+            }
+
+            base.OnStartup(e);
+        }
+
+        private void RdpWindow_Closed(object sender, EventArgs e)
+        {
+            string result = JsonSerializer.Serialize(rdpWindow.Result, new JsonSerializerOptions() { Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) });
+
+            Debug.WriteLine($"{result}");
+            Console.WriteLine($"{result}");
+
+            rdpWindow.Closed -= RdpWindow_Closed;
+            rdpWindow = null;
+
+            Shutdown();
         }
     }
 }

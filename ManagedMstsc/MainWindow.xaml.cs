@@ -22,7 +22,7 @@ namespace ManagedMstsc
         private void Button_Click(object sender, RoutedEventArgs e)
         {
             rdpWindow = new RdpWindow();
-            rdpWindow.Closed += Window_Closed;
+            rdpWindow.Closed += RdpWindow_Closed;
             Hide();
 
             #region 設定反映
@@ -44,14 +44,14 @@ namespace ManagedMstsc
             rdpWindow.Connect(new Rect(Left, Top, Width, Height));
         }
 
-        private void Window_Closed(object sender, EventArgs e)
+        private void RdpWindow_Closed(object sender, EventArgs e)
         {
             string result = JsonSerializer.Serialize(rdpWindow.Result, new JsonSerializerOptions() { Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) });
 
             Debug.WriteLine($"{result}");
             Console.WriteLine($"{result}");
 
-            rdpWindow.Closed -= Window_Closed;
+            rdpWindow.Closed -= RdpWindow_Closed;
             rdpWindow = null;
 
             // プログラムとして切断後は直ちに終わる場合
